@@ -30,6 +30,10 @@ def signed(value, digits=0):
     return "尚未公布" if value is None else f"{value:+,.{digits}f}"
 
 
+def ratio(value):
+    return "尚未公布" if value is None else f"{value:,.2f}%"
+
+
 def metrics(row):
     return [
         ("外資及陸資", money(row.get("foreign_net")), "億元", "institutions"),
@@ -68,10 +72,10 @@ def markdown(rows, row=None):
     if not rows:
         return "# 台股數字核對\n\n尚無資料，請先更新。\n"
     row = row or rows[-1]
-    lines = [f"# 台股數字核對｜{row['date']}", "", "範圍：上市集中市場；盤後官方數據。正數為買超／增加，負數為賣超／減少。", ""]
+    lines = [f"# 台股數字核對｜{row['date']}", "", "範圍：上市集中市場＋臺指選擇權（TXO）；盤後官方數據。正數為買超／增加，負數為賣超／減少。", ""]
     if row["date"] != today().isoformat():
         lines += [f"資料日為 {row['date']}，不是今天 {today()}。休市或盤後資料尚未公布時會保留最近資料。", ""]
-    if missing := [label for source, label in (("market", "大盤"), ("institutions", "法人"), ("margin", "融資券")) if source not in row["sources"]]:
+    if missing := [label for source, label in (("market", "大盤"), ("institutions", "法人"), ("margin", "融資券"), ("put_call", "Put/Call")) if source not in row["sources"]]:
         lines += [f"此日尚缺：{'、'.join(missing)}。空缺不以零代替。", ""]
     lines += ["| 指標 | 閱讀數值 | 完整數值 |", "| --- | ---: | ---: |"]
     raw_metrics = [row.get(k) for k in ('foreign_net', 'trust_net', 'dealer_net', 'total_net')] + [delta(row, 'financing'), delta(row, 'short')]
@@ -80,6 +84,11 @@ def markdown(rows, row=None):
         lines.append(f"| {name} | {value} {unit} | {exact(raw)} {raw_unit} |")
     lines += [f"| 融資餘額 | {money(row.get('financing_balance'), False)} 億元 | {exact(row.get('financing_balance'), False)} 元 |",
               f"| 融券餘額 | {exact(row.get('short_balance'), False)} 交易單位 | {exact(row.get('short_balance'), False)} 交易單位 |"]
+    lines += ["", "## 臺指選擇權 Put/Call Ratio", "",
+              "比率＝賣權（Put）÷買權（Call）×100%；100% 等於 1 倍。週到期與各到期月份契約合併計算。", "",
+              "| 項目 | 賣權（口） | 買權（口） | P/C 比率 |", "| --- | ---: | ---: | ---: |"]
+    for title, kind in (("未平倉量", "oi"), ("成交量", "volume")):
+        lines.append(f"| {title} | {exact(row.get('put_' + kind), False)} | {exact(row.get('call_' + kind), False)} | {ratio(row.get('put_call_' + kind + '_pct'))} |")
     lines += ["", "## 買進與賣出", "", "| 法人 | 買進（億元） | 賣出（億元） | 買賣超（億元） |", "| --- | ---: | ---: | ---: |"]
     for name, key in (("外資及陸資", "foreign"), ("投信", "trust"), ("自營商自行買賣", "dealer_self"), ("自營商避險", "dealer_hedge"), ("合計", "total")):
         lines.append(f"| {name} | {money(row.get(key+'_buy'), False)} | {money(row.get(key+'_sell'), False)} | {money(row.get(key+'_net'))} |")
@@ -90,13 +99,13 @@ def markdown(rows, row=None):
         cells.append(money(delta(row, key)) if monetary else signed(delta(row, key)))
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
     lines += ["", "## 數字對照", ""] + [f"- {note}" for note in observations(rows, row)]
-    lines += ["", "## 近期交易日", "", "| 日期 | 外資（億） | 投信（億） | 自營商（億） | 合計（億） | 融資增減（億） | 融券增減（交易單位） | 大盤漲跌 | 成交額（億） |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    lines += ["", "## 近期交易日", "", "| 日期 | 外資（億） | 投信（億） | 自營商（億） | 合計（億） | 融資增減（億） | 融券增減（交易單位） | 大盤漲跌 | 成交額（億） | P/C 未平倉量 | P/C 成交量 |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for r in [r for r in rows if r["date"] <= row["date"]][-10:]:
         market_pct = f"{r['index_pct']:+.2f}%" if "index_pct" in r else "尚未公布"
-        lines.append(f"| {r['date']} | {money(r.get('foreign_net'))} | {money(r.get('trust_net'))} | {money(r.get('dealer_net'))} | {money(r.get('total_net'))} | {money(delta(r, 'financing'))} | {signed(delta(r, 'short'))} | {market_pct} | {money(r.get('turnover'), False)} |")
-    lines += ["", "## 口徑與來源", "", "- 金額統一以新臺幣元入庫，畫面換算億元；融資金額原始 CSV 單位為仟元。", "- 融券沿用官方「交易單位」，一般股票為張；不把不同商品一律換成股數。", "- 每日融資券增減＝同日報表的今日餘額－前日餘額。前日餘額可能經官方調帳，並非直接減去資料庫上一天的今日餘額。", "- 外資欄為外資及陸資（不含外資自營商）；自營商含自行買賣與避險。外資自營商已計入自營商，不能再加一次。", "- 今日餘額可能修正；每次更新會重抓最近三個交易日。可使用 --refresh 重抓完整期間。", "- 未納入上櫃、期貨與借券。這些資料不足以推算融資戶損益、維持率或斷定未來方向。", ""]
+        lines.append(f"| {r['date']} | {money(r.get('foreign_net'))} | {money(r.get('trust_net'))} | {money(r.get('dealer_net'))} | {money(r.get('total_net'))} | {money(delta(r, 'financing'))} | {signed(delta(r, 'short'))} | {market_pct} | {money(r.get('turnover'), False)} | {ratio(r.get('put_call_oi_pct'))} | {ratio(r.get('put_call_volume_pct'))} |")
+    lines += ["", "## 口徑與來源", "", "- 金額統一以新臺幣元入庫，畫面換算億元；融資金額原始 CSV 單位為仟元。", "- 融券沿用官方「交易單位」，一般股票為張；不把不同商品一律換成股數。", "- 每日融資券增減＝同日報表的今日餘額－前日餘額。前日餘額可能經官方調帳，並非直接減去資料庫上一天的今日餘額。", "- 外資欄為外資及陸資（不含外資自營商）；自營商含自行買賣與避險。外資自營商已計入自營商，不能再加一次。", "- 今日餘額可能修正；每次更新會重抓最近三個交易日。可使用 --refresh 重抓完整期間。", "- Put/Call 為臺指選擇權統計，不代表法人淨多空或直接買賣訊號；未納入上櫃、期貨與借券。這些資料不足以推算融資戶損益、維持率或斷定未來方向。", ""]
     for source, meta in row["sources"].items():
-        label = {"market": "市場成交資訊", "institutions": "三大法人買賣金額", "margin": "信用交易統計"}[source]
+        label = {"market": "市場成交資訊", "ohlc": "加權指數歷史資料（開高低）", "institutions": "三大法人買賣金額", "margin": "信用交易統計", "put_call": "臺指選擇權 Put/Call 比（期交所）"}.get(source, source)
         lines.append(f"- [{label}]({meta['url']})；擷取時間 {meta['fetched_at']}")
     return "\n".join(lines) + "\n"
 

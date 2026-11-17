@@ -25,6 +25,7 @@ def main(argv=None):
     report.add_argument("--json", action="store_true", help="輸出所有日期的原始數值（新臺幣元）")
     gui = commands.add_parser("widget", help="開啟桌面與系統匣小工具")
     gui.add_argument("--compact", action="store_true", help="直接開啟小視窗")
+    gui.add_argument("--tray", action="store_true", help="啟動時只顯示系統匣圖示")
     gui.add_argument("--screenshot", type=Path, help=argparse.SUPPRESS)
     commands.add_parser("desktop-install", help="安裝 Linux 應用程式啟動捷徑（不加入開機自啟）")
     args = parser.parse_args(argv)
@@ -55,7 +56,7 @@ def main(argv=None):
             except ImportError as exc:
                 print(f"桌面元件尚未安裝：{exc}。請執行 uv sync --extra gui", file=sys.stderr)
                 return 1
-            return run(args.db, args.compact, args.screenshot)
+            return run(args.db, args.compact, args.screenshot, start_in_tray=args.tray)
         if args.command == "desktop-install":
             if not sys.platform.startswith('linux'):
                 parser.error("此啟動捷徑安裝指令適用 Linux；其他平台請執行 widget")
