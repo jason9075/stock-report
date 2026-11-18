@@ -20,6 +20,25 @@ uv run stock-report widget --compact
 
 之後可在專案目錄執行 `./scripts/widget.sh`。安裝下方的桌面捷徑後，也能在 Ubuntu 應用程式選單搜尋「台股數字核對」。
 
+### NixOS / Nix
+
+已啟用 flakes 時，在專案目錄執行：
+
+```bash
+nix develop
+stock-report sync --start 2026-11-01
+just widget
+# 或 just tray，在背景啟動系統匣圖示
+```
+
+`flake.nix` 提供 Python、PySide6、Qt 的 Wayland／X11 外掛、`just` 與 `uv`，支援 x86_64 與 aarch64 Linux。`flake.lock` 固定 Nix 套件版本；Nix 環境中的 `just` 與 `scripts/widget.sh` 直接使用 Nix 的 Python，不需要執行 `uv sync`。請在專案目錄使用 `stock-report`，也可執行 `python -m stock_report`。
+
+不進入互動 shell 也能啟動：
+
+```bash
+nix develop --command just widget
+```
+
 已安裝 `just` 與 `uv` 時，也可使用 Justfile：
 
 ```bash

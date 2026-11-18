@@ -4,7 +4,7 @@ default:
 
 # Install the application and desktop dependencies.
 setup:
-    uv sync --extra gui
+    if [ -z "${STOCK_REPORT_PYTHON:-}" ]; then uv sync --extra gui; fi
 
 # Launch in the background with a system tray icon; logs: data/widget.log.
 tray: setup
@@ -18,4 +18,4 @@ widget: setup
 
 # Install the Linux application menu shortcut.
 desktop-install: setup
-    .venv/bin/python -m stock_report desktop-install
+    "${STOCK_REPORT_PYTHON:-.venv/bin/python}" -m stock_report desktop-install
